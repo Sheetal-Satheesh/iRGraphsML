@@ -29,6 +29,7 @@ class DecisionTreeClassifier:
 
     def _splitter(self, *args) -> object:
         """
+        TO DO: Improve the comment
         It finds the decision node
         :param: dictionary which contains key as classes and
                 the values are mutually exclusive
@@ -72,16 +73,40 @@ class DecisionTreeClassifier:
 
     def fit(self, *args):
         """
-        The binary decision tree
-        Takes input the patterns with which we construct
-        a decision tree
-        :return: the root node of the decision tree
+        Construct a binary decision tree using the random walks
+        This method constructs a binary decision tree by taking input patterns and their associated classes.
+        The decision tree is built using a recursive algorithm that splits the patterns at each node based on
+        the concepts in the patterns.
+
+        :param args: Variable-length argument list containing the patterns and their associated classes.
+                     The first argument should be a dictionary of patterns, where each key is an identifier
+                     (class to which it belongs) and the corresponding value is a list representing the
+                     pattern (sequence of concepts).
+
+        :return: The root node of the decision tree.
 
         Attributes
         ----------
-        Dict: which contains the pattern
+        n_features (int): Total number of features (concepts) in all the input patterns.
+        root (Node): The root node of the constructed decision tree.
 
+        Example:
+            tree = DecisionTree()
+
+            # Input patterns and their associated classes
+            patterns = {
+            'ClassA': [['concept1', 'concept2', 'concept3'], ['concept4', 'concept5', 'concept6']],
+            'ClassB': [['concept7', 'concept8', 'concept9'], ['concept10', 'concept11', 'concept12']]
+            }
+            class_labels here are ['ClassA', 'ClassB']
+
+            # Fit the decision tree with the input patterns and classes
+            tree.fit(*patterns)
+
+            # Access the root node of the decision tree
+            root_node = tree.root
         """
+
         if len(args) % 2 != 1:
             raise ValueError("Should contain the pattern as a dictionary")
         pattern = args[0]
@@ -114,17 +139,50 @@ class DecisionTreeClassifier:
             return None
 
     def predict(self, *args):
-        r"""
-        Compare the test set with the generated <Decision Tree>
-        :return: a dictionary containing the prediction with the nodeID
-                and walk
         """
+        Compare the test set patterns with the generated Decision Tree.
+
+        This method takes one or more patterns as input and traverses the Decision Tree
+        to predict the corresponding nodeIDs and walks for each pattern in the test set.
+
+        :param args: Variable-length argument list containing patterns to be predicted.
+                     Each pattern should be provided as a dictionary, where the keys are nodeIDs,
+                     and the values are lists representing walks (sequence of concepts).
+
+        :return: A dictionary containing the prediction results for each pattern in the test set.
+                 Each prediction entry is a nested dictionary containing the following information:
+                 - 'pred_class': The predicted class associated with the pattern.
+                 - 'Node': The nodeID in the Decision Tree where the prediction was made.
+                 - 'concept': The sequence of concepts (walk) that resulted in the prediction.
+
+        Raises:
+            ValueError: If the Decision Tree is not trained.
+
+        Example:
+            tree = DecisionTree()
+            # Assuming the Decision Tree is trained using the 'fit' method
+
+            test_patterns = {
+                'TestNode1': [['concept1', 'concept2', 'concept3']],
+                'TestNode2': [['concept7', 'concept8', 'concept9']]
+            }
+
+            result = tree.predict(test_patterns)
+            print(result)
+            # Output: {{
+            #              1: {'pred_class': 'ClassA', 'Node': 'TestNode1', 'concept': 'concept1-concept2-concept3'},
+            #              2: {'pred_class': 'ClassB', 'Node': 'TestNode2', 'concept': 'concept7-concept8-concept9'}
+            #          }
+
+        """
+        # TO DO: Change the count to keep count of the Random-walk of the same node.
+        # As a single test nodes can have multiple random walks
+
         if not self.root:
             raise ValueError("The Decision Tree is not trained. Call 'fit' before predicting.")
         pattern = args[0]
         predicted_dict = {}
         count = 1
-        node = self.root
         for k, v in pattern.items():
             value = v[:]
             for walks in value:
