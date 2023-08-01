@@ -35,7 +35,6 @@ def find_disjoint_lists(patterns):
                             items_to_remove.append(items)
                             patterns[next_key] = [nested_list for nested_list in patterns[next_key] if
                                                   nested_list != items]
-                            print(patterns)
                     if not flag:
                         items_to_remove = list_to_compare
             if items_to_remove:
@@ -75,15 +74,8 @@ def remove_uri_prefix(uri):
     return str(uri)
 
 
-# Example usage:
-ordered_dict = OrderedDict({
-    'key1': [(1, 2,), (3, 4, 6,), (5, 6,)],
-    'key2': [(4, 5,), (3, 4,)],
-    # 'key3': [[3, 4], [6, 1], [5, 6], [7, 8]],
-    # 'key4': [[9, 10], [6, 1], [7, 11], [5, 6]],
-    # 'key5': [[12, 13], [14, 15]],
-    # 'key6': [[15, 13, 6]]
-})
-
-# disjoint_lists = find_disjoint_lists(ordered_dict)
-# print(disjoint_lists)
+def merge_dict(input_dict):
+    merged_dict = {}
+    for inner_dict in input_dict.values():
+        merged_dict.update(inner_dict)
+    return merged_dict

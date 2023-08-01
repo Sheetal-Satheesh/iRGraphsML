@@ -56,13 +56,8 @@ class AIFBDataset(RDFGraphDataset):
     University of Karlsruhe.
 
     AIFB dataset statistics:
-
-    - Nodes: 7262
-    - Edges: 48810 (including reverse edges)
-    - Target Category: Personen
     - Number of Classes: 4
     - Label Split:
-
         - Train: 140
         - Test: 36
     '''
@@ -82,9 +77,33 @@ class AIFBDataset(RDFGraphDataset):
         '''
         :param rootpath:
         :param training_path:
-        :return:
+        :return: dictionary with class labels as key and values as
 
         Get the number of classes for each class create a nested dictionary
+        '''
+        # Read the TSV file into a DataFrame
+        filepath = self.rootpath + self.training_path
+        df = pd.read_csv(filepath, sep='\t')
+        data_dict = {}
+        # Iterate through the DataFrame and populate the dictionary
+        for index, row in df.iterrows():
+            label = row['label_affiliation']
+            person = row['person']
+            data_id = int(row['id'])
+
+            if label not in data_dict:
+                data_dict[label] = {}
+
+            data_dict[label][person] = data_id
+        return data_dict
+
+    def read_testing_data(self):
+        ''' TODO: Rewrite the doc string
+        :param rootpath:
+        :param test_path:
+        :return: dictionary with class labels as keys and corresponding values i.e. the person and id
+
+        Get the number of classes for each class create a nested dictionary.
         '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
@@ -108,12 +127,8 @@ class MUTAGDataset(RDFGraphDataset):
 
     Mutag dataset statistics:
 
-    - Nodes: 27163
-    - Edges: 148100 (including reverse edges)
-    - Target Category: d
     - Number of Classes: 2
     - Label Split:
-
         - Train: 272
         - Test: 68
 
@@ -143,6 +158,31 @@ class MUTAGDataset(RDFGraphDataset):
         '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
+        df = pd.read_csv(filepath, sep='\t')
+        data_dict = {}
+        # Iterate through the DataFrame and populate the dictionary
+        for index, row in df.iterrows():
+            label = row['label_mutagenic']
+            bond = row['bond']
+            data_id = row['id']
+
+            if label not in data_dict:
+                data_dict[label] = {}
+
+            data_dict[label][bond] = data_id
+
+        return data_dict
+
+    def read_testing_data(self):
+        '''
+        :param rootpath:
+        :param testing_path:
+        :return:
+
+        Get the number of classes for each class create a nested dictionary
+        '''
+        # Read the TSV file into a DataFrame
+        filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
         data_dict = {}
         # Iterate through the DataFrame and populate the dictionary
