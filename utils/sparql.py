@@ -113,8 +113,8 @@ class DecodeRWSparQL:
                     <{sub_type}> <{pred}> ?res  .
                     FILTER (
                         isLiteral(?res) &&
-                        (datatype(?res) = xsd:double || datatype(?res) = xsd:float || datatype(?res) = xsd:int) &&
-                        ?res = <{obj_type}>
+                        (datatype(?res) = xsd:double || datatype(?res) = xsd:float || datatype(?res) = xsd:int || datatype(?res) = xsd:boolean) && 
+                        datatype(?res) = <{obj_type}>
                     )
                 }}            
             UNION 
