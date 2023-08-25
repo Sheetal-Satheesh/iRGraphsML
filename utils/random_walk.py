@@ -5,12 +5,12 @@ from rdflib import Graph, URIRef, RDF, OWL
 
 
 class RandomWalk(metaclass=ABCMeta):
-    def __init__(self, graph, data_dict, num_walks=4, walk_length=3, labelled=False):
+    def __init__(self, graph, data_dict, num_walks=4, depth=3, labelled=False):
         self.random_walk = {}
         self.data_dict = data_dict
         self.graph = graph
         self.num_walks = num_walks
-        self.walk_length = walk_length
+        self.depth = depth
         self.labelled = labelled
         self.most_occurring_pattern = {}
 
@@ -18,7 +18,7 @@ class RandomWalk(metaclass=ABCMeta):
         return self.random_walk
 
     def set_random_walk(self):
-        self._random_walk(self.data_dict, self.graph, self.num_walks,  self.walk_length, self.labelled)
+        self._random_walk(self.data_dict, self.graph, self.num_walks,  self.depth, self.labelled)
 
     def get_most_occurring_pattern_for_random_walks(self, count=15):
         if bool(self.random_walk):
@@ -34,19 +34,19 @@ class RandomWalk(metaclass=ABCMeta):
     def clean(self):
         self.random_walk = None
 
-    def _random_walk(self, data_dict, graph, num_walks=4, walk_length=3, labelled=False):
+    def _random_walk(self, data_dict, graph, num_walks=2, depth=3, labelled=False):
 
         if labelled:
             classes_for_rw = data_dict.keys()
             for cls in classes_for_rw:
                 training_nodes = data_dict[cls]
-                path_sequences = self.generate_random_walks(training_nodes, graph, num_walks, walk_length)
+                path_sequences = self.generate_random_walks(training_nodes, graph, num_walks, depth)
                 if cls not in self.random_walk:
                     self.random_walk[cls] = path_sequences
         else:
             nodes = data_dict.keys()
             for node in nodes:
-                path_sequences = self.generate_random_walks([node], graph, num_walks, walk_length)
+                path_sequences = self.generate_random_walks([node], graph, num_walks, depth)
                 if node not in self.random_walk:
                     self.random_walk[node] = path_sequences
 
@@ -65,12 +65,12 @@ class RandomWalk(metaclass=ABCMeta):
 
         # Find the list with the maximum count
         most_common_list = max(counts, key=counts.get)
-        top_three_random_walk_occurrences = [item[0] for item in counts.most_common(count)]
+        most_occuring_random_walk_occurrences = [item[0] for item in counts.most_common(count)]
         occurrence_count = counts[most_common_list]
 
-        return top_three_random_walk_occurrences
+        return most_occuring_random_walk_occurrences
 
-    def generate_random_walks(self, nodes, graph, num_walks, walk_length):
+    def generate_random_walks(self, nodes, graph, num_walks, depth):
         path_sequences = []
         for node in nodes:
             current_node = URIRef(node)
@@ -79,19 +79,16 @@ class RandomWalk(metaclass=ABCMeta):
 
             for walk in range(num_walks):
                 path_sequence = [class_of_current_node]
-                for _ in range(walk_length - 1):
+                for w in range(depth - 1):
                     # Get all outgoing predicates from the current node
                     predicates = list(graph.predicates(subject=current_node))
+                    predicates = [predicate for predicate in predicates if predicate != RDF.type]
                     # print(f'Predicates:{predicates}')
                     if not predicates:
                         break  # Stop the random walk if there are no outgoing predicates
 
                     # Choose a random edge/predicate
                     random_predicate = predicates[random.randint(0, len(predicates) - 1)]
-                    if random_predicate == RDF.type:
-                        random_predicate_flag = True
-                    else:
-                        random_predicate_flag = False
 
                     # Get all objects connected by the random predicate
                     objects = list(graph.objects(subject=current_node, predicate=random_predicate))
@@ -101,26 +98,30 @@ class RandomWalk(metaclass=ABCMeta):
 
                     # Choose a random object
                     random_object = objects[random.randint(0, len(objects) - 1)]
-                    if not random_predicate_flag:
-                        # Check if the predicate is a data property
-                        is_data_property = (random_predicate, RDF.type, OWL.DatatypeProperty) in graph
-                        if is_data_property:
-                            data_prop_flag = True
-                        else:
-                            data_prop_flag = False
+                    random_object_class = None
 
-                        if not data_prop_flag:
-                            classes_of_object_node = self.get_classes_of_current_node(graph, current_node)
-                            class_of_object_node = random.choice(classes_of_object_node)
-                            if class_of_object_node in URIRef('http://www.w3.org/2002/07/owl#Class'):
-                                random_object = random_object
-                            else:
-                                random_object = class_of_object_node
+                    # Check if the predicate is a data property
+                    is_data_property = (random_predicate, RDF.type, OWL.DatatypeProperty) in graph
+                    if is_data_property:
+                        data_prop_flag = True
+                        random_object_class = random_object.datatype
+                    else:
+                        data_prop_flag = False
+
+                    if not data_prop_flag:
+                        classes_of_object_node = self.get_classes_of_current_node(graph, random_object)
+                        class_of_object_node = random.choice(classes_of_object_node)
+                        if class_of_object_node in URIRef('http://www.w3.org/2002/07/owl#Class'):
+                            random_object_class = random_object
+                        else:
+                            random_object_class = class_of_object_node
 
                     path_sequence.append(random_predicate)
-                    path_sequence.append(random_object)
+                    path_sequence.append(random_object_class)
 
                     # Update the current node for the next step
                     current_node = random_object
-                path_sequences.append(path_sequence)
+
+                if len(path_sequence) > 1:
+                    path_sequences.append(path_sequence)
         return path_sequences
