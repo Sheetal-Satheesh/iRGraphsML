@@ -1,6 +1,7 @@
 from rdflib import Graph, URIRef, Literal
 from rdflib.namespace import RDF
 from collections import OrderedDict
+import copy
 
 class DecodeRWSparQL:
     def __init__(self, path_sequence, graph):
@@ -17,27 +18,30 @@ class DecodeRWSparQL:
         no_of_classes = len(list(self.path.keys()))
         class_labels = list(self.path.keys())
         i = 0
-        while i < no_of_classes - 1:
+        while i < no_of_classes:
             key = class_labels[i]
             v = self.path[key]
             for test_id in test_ids:
                 sub_paths = [list(nested_tuple) for nested_tuple in v]
-                is_a_class = self.predict_class(sub_paths, test_id)
+                is_a_class, path = self.predict_class(sub_paths, test_id)
                 if is_a_class:
                     if test_id not in predicted_dict:
                         predicted_dict[test_id] = {
-                            'pred_class': key
+                            'pred_class': key,
+                            'path': path
                         }
                     else:
                         value = predicted_dict[test_id]['pred_class']
                         if value is None:
                             predicted_dict[test_id] = {
-                            'pred_class': key
+                            'pred_class': key,
+                            'path': path
                         }
                 else:
                     if test_id not in predicted_dict:
                         predicted_dict[test_id] = {
-                            'pred_class': None
+                            'pred_class': None,
+                            'path': path
                         }
             i = i + 1
 
@@ -52,6 +56,7 @@ class DecodeRWSparQL:
         flag = False
         for sub_path in paths:
             if len(sub_path) >= 3:
+                path = copy.deepcopy(sub_path)
                 sub_type = sub_path.pop(0)
                 pred = sub_path.pop(0)
                 obj_type = sub_path.pop(0)
@@ -62,11 +67,11 @@ class DecodeRWSparQL:
                     is_valid_path = self.check_path_validity(sub_path, l_ids)
                     if is_valid_path:
                         flag = True
-                        return flag
+                        return flag, path
                 elif len(l_ids) != 0 and len(sub_path) == 0:
                     flag = True
-                    return flag
-        return flag
+                    return flag, path
+        return flag, None
 
     
     def check_path_validity(self, path, list_ids):
