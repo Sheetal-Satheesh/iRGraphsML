@@ -1,4 +1,5 @@
-from collections import OrderedDict
+from collections import OrderedDict, Counter
+import random
 
 
 class TreeNode:
@@ -16,15 +17,15 @@ class DecisionTreeClassifier:
         self.n_features = n_features
         self.root = None
 
-    def __str__(self):
-        return self._in_order_traversal(self.root)
+    def __repr__(self):
+        return self.in_order_traversal(self.root)
 
-    def _in_order_traversal(self, node):
+    def in_order_traversal(self, node):
         if node is None:
             return " "
-        left = self._in_order_traversal(node.child_left)
+        left = self.in_order_traversal(node.child_left)
         value = str(node.value) + " "
-        right = self._in_order_traversal(node.child_right)
+        right = self.in_order_traversal(node.child_right)
         return left + value + right
 
     def _splitter(self, *args) -> object:
@@ -83,7 +84,7 @@ class DecisionTreeClassifier:
                      (class to which it belongs) and the corresponding value is a list representing the
                      pattern (sequence of concepts).
 
-        :return: The root node of the decision tree.
+        :return: The decision tree.
 
         Attributes
         ----------
@@ -151,7 +152,7 @@ class DecisionTreeClassifier:
 
         :return: A dictionary containing the prediction results for each pattern in the test set.
                  Each prediction entry is a nested dictionary containing the following information:
-                 - 'pred_class': The predicted class associated with the pattern.
+                 - 'label': The predicted class associated with the pattern.
                  - 'Node': The nodeID in the Decision Tree where the prediction was made.
                  - 'concept': The sequence of concepts (walk) that resulted in the prediction.
 
@@ -170,8 +171,8 @@ class DecisionTreeClassifier:
             result = tree.predict(test_patterns)
             print(result)
             # Output: {{
-            #              1: {'pred_class': 'ClassA', 'Node': 'TestNode1', 'concept': 'concept1-concept2-concept3'},
-            #              2: {'pred_class': 'ClassB', 'Node': 'TestNode2', 'concept': 'concept7-concept8-concept9'}
+            #              1: {'label': 'ClassA', 'Node': 'TestNode1', 'concept': 'concept1-concept2-concept3'},
+            #              2: {'label': 'ClassB', 'Node': 'TestNode2', 'concept': 'concept7-concept8-concept9'}
             #          }
 
         """
@@ -198,8 +199,8 @@ class DecisionTreeClassifier:
                                 node_temp = '-'.join(node.value)
                                 if temp == node_temp:
                                     predicted_dict[count] = {
-                                        'pred_class': self._get_node_value(node.child_left),
-                                        'concept': temp,
+                                        'label': self._get_node_value(node.child_left),
+                                        'path': temp,
                                         'Node': k
                                     }
                                     count = count + 1
@@ -211,15 +212,16 @@ class DecisionTreeClassifier:
                         else:
                             temp = '-'.join(walks)
                             predicted_dict[count] = {
-                                'pred_class': self._get_node_value(node),
+                                'label': self._get_node_value(node),
                                 'Node': k,
-                                'concept': temp
+                                'path': temp
                             }
                             count = count + 1
                             break
                     except Exception as e:
                         print(f'Error{e}')
                         break
+        predicted_dict = self._calculate_majority_label_and_random_path(predicted_dict)
         return predicted_dict
 
     def _get_node_value(self, node):
@@ -233,3 +235,36 @@ class DecisionTreeClassifier:
             return node.child_right if node else None
         else:
             raise ValueError('Invalid')
+
+    def _calculate_majority_label_and_random_path(self, input_dict):
+        # Create a dictionary to store the majority label and random path
+        output_dict = {}
+
+        # Map nodes to their predicted class values
+        node_label_mapping = {}
+        for _, value in input_dict.items():
+            node = value['Node']
+            label = value['label']
+            if node not in node_label_mapping:
+                node_label_mapping[node] = []
+            node_label_mapping[node].append(label)
+
+        # Calculate majority label and create output_dict
+        for node, label_values in node_label_mapping.items():
+            label_counter = Counter(label_values)
+            majority_label = label_counter.most_common(1)[0][0]
+
+            paths_for_node = [value['path'] for _, value in input_dict.items() if
+                              value['Node'] == node and 'path' in value]
+
+            if paths_for_node:
+                random_path = random.choice(paths_for_node)
+            else:
+                random_path = "No available path"
+
+            output_dict[node] = {
+                'label': majority_label,
+                'path': random_path
+            }
+
+        return output_dict

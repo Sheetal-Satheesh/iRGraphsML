@@ -52,7 +52,7 @@ def score(params, original_dict):
         original_values = list(value.keys())
         original_class = int(key)
         for k in params:
-            predicted_class = int(params[k]['pred_class'])
+            predicted_class = int(params[k]['label'])
             predicted_value = k
             if predicted_value in original_values:
                 if original_class == 1 and predicted_class == 1:
