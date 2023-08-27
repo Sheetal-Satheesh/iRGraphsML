@@ -21,8 +21,8 @@ def precision(params, original_dict):
 def f1_score(params, original_dict):
     try:
         tp, tn, fp, fn = score(params, original_dict)
-        recall_value = recall(tp, tn, fp, fn)
-        precision_value = precision(tp, tn, fp, fn)
+        recall_value = tp / (tp + fn)
+        precision_value = tp / (tp + fp)
 
         if precision_value == 0 or recall_value == 0:
             return 0
@@ -35,6 +35,8 @@ def f1_score(params, original_dict):
 def accuracy(params, original_dict):
     try:
         tp, tn, fp, fn = score(params, original_dict)
+        acc = (tp + tn) / (tp + tn + fp + fn)
+        return acc
     except ZeroDivisionError:
         return 0
 
@@ -45,7 +47,7 @@ def score(params, original_dict):
     :param original_dict:
     :return: count of tp, tn, fp, fn
     """
-    tp, tn, fp, fn = 0
+    tp, tn, fp, fn = 0, 0, 0, 0
     for key, value in original_dict.items():
         original_values = list(value.keys())
         original_class = int(key)
