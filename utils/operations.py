@@ -1,6 +1,5 @@
-from collections import OrderedDict, Counter
+from collections import Counter
 from rdflib import URIRef
-from utils.concept_generator import ConceptGenerator
 import pandas as pd
 
 
@@ -80,9 +79,12 @@ def find_disjoint_lists(patterns):
 def get_pattern_list(pattern: list, length: int = 3) -> list:
     resultant_pattern = []
     for item in pattern:
+        print(item)
         if len(item) > length:
-            concept_generator = ConceptGenerator(item)
-            resultant_pattern.append(concept_generator.generate_path())
+            # concept_generator = ConceptGenerator(item)
+            # resultant_pattern.append(concept_generator.generate_path())
+            local_names = [extract_local_name(uri) for uri in item]
+            resultant_pattern.append(local_names)
     return resultant_pattern
 
 
@@ -187,3 +189,17 @@ def format_data_for_metrics(test_data=None, predicted_data=None):
         })
         df.to_csv('xyz.csv')
         return df
+
+def extract_local_name(uri):
+    # Convert the URIRef object to a string
+    uri_str = str(uri)
+
+    # Check if the URI contains a '#' character
+    if '#' in uri_str:
+        # Split the URI by '#' and return the last part (the local name)
+        local_name = uri_str.rsplit('#', 1)[-1]
+    else:
+        # Split the URI by '/' and return the last part (the local name)
+        local_name = uri_str.rsplit('/', 1)[-1]
+
+    return local_name

@@ -1,33 +1,45 @@
 import os
-import itertools
 from abc import ABCMeta, abstractmethod
 
 import rdflib
 import rdflib as rdf
 import pandas as pd
 
-__all__ = ["AIFBDataset", "MUTAGDataset", "DBLPDataset", "BGSDataset"]
+__all__ = ["AIFBDataset", "MUTAGDataset", "DBLPDataset", "BGSDataset", "AMDataset"]
 
 
 class RDFGraphDataset(metaclass=ABCMeta):
+    """Abstract base class for RDF graph datasets.
 
+        This class provides a framework for working with RDF graph datasets.
+        Parameters
+        ----------
+        rootpath :
+            The root directory path where RDF data is stored.
+        training_path :
+            The directory path where training  data is stored.
+        test_path : str or None, optional
+            The directory path where test data is stored.
+
+        Methods
+        -------
+        load_rdf_graph()
+        get_unique_classes(rootpath, training_path)
+        get_most_prominent_class(outer_to_inner)
+
+    """
     def __init__(self, rootpath=None, training_path=None, test_path=None):
         self.rootpath = rootpath
         self.training_path = training_path
         self.test_path = test_path
 
     def load_rdf_graph(self):
-        """ TODO: Rewrite the doc string
-        Loading raw RDF raw_data
+        """Load raw RDF data from files in the specified rootpath.
 
-                    Parameters
-                    ----------
-                    root_path : str
-                        Root path containing the data
-
-                    Returns
-                    -------
-                        Loaded rdf data
+        Returns
+        -------
+        rdflib.Graph
+            A combined RDF graph containing data from all files .
         """
         raw_rdf_graphs = []
         combined_graph = rdflib.Graph()
@@ -49,9 +61,35 @@ class RDFGraphDataset(metaclass=ABCMeta):
 
     @abstractmethod
     def get_unique_classes(self, rootpath, training_path):
+        """Abstract method to be implemented by subclasses.
+
+            Parameters
+            ----------
+            rootpath : str
+                The root directory path where RDF data is stored.
+            training_path : str
+                The directory path where training RDF data is stored.
+
+            Returns
+            -------
+            dict
+                A dictionary mapping unique classes to their respective data.
+        """
         pass
 
     def get_most_prominent_class(self, outer_to_inner):
+        """Get the most prominent class from a dictionary mapping outer classes to inner classes.
+
+            Parameters
+            ----------
+            outer_to_inner : dict
+                A dictionary mapping outer classes to inner classes.
+
+            Returns
+            -------
+            str
+                The outer class with the highest count of inner classes.
+        """
         label_counts = {}
         for outer_key in outer_to_inner:
             inner_dict = outer_to_inner[outer_key]
@@ -61,9 +99,8 @@ class RDFGraphDataset(metaclass=ABCMeta):
 
 
 class AIFBDataset(RDFGraphDataset):
-    ''' TODO: Rewrite the doc string
+    '''
     AIFB raw_data for node classification task
-
     AIFB DataSet is a Semantic Web (RDF) raw_data used as a benchmark in
     data mining.  It records the organizational structure of AIFB at the
     University of Karlsruhe.
@@ -88,11 +125,8 @@ class AIFBDataset(RDFGraphDataset):
 
     def read_training_data(self):
         '''
-        :param rootpath:
-        :param training_path:
-        :return: dictionary with class labels as key and values as
-
-        Get the number of classes for each class create a nested dictionary
+        Read and process testing data from a TSV file.
+        Returns a  dictionary where class labels are keys, and their corresponding values are dictionaries
         '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
@@ -119,13 +153,11 @@ class AIFBDataset(RDFGraphDataset):
         return data_dict
 
     def read_testing_data(self):
-        ''' TODO: Rewrite the doc string
-        :param rootpath:
-        :param test_path:
-        :return: dictionary with class labels as keys and corresponding values i.e. the person and id
+        """Read and process testing data from a TSV file.
 
-        Get the number of classes for each class create a nested dictionary.
-        '''
+            Returns a dictionary where class labels are keys, and their corresponding values are dictionaries
+            mapping person names to data IDs.
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
@@ -153,16 +185,12 @@ class AIFBDataset(RDFGraphDataset):
 
 class MUTAGDataset(RDFGraphDataset):
     r"""MUTAG raw_data for node classification task
-
     Mutag raw_data statistics:
-
     - Number of Classes: 2
     - Label Split:
         - Train: 272
         - Test: 68
 
-    Parameters
-    -----------
     """
 
     def __int__(self, rootpath, training_path, test_path):
@@ -178,13 +206,12 @@ class MUTAGDataset(RDFGraphDataset):
         return unique_classes
 
     def read_training_data(self):
-        '''
-        :param rootpath:
-        :param training_path:
-        :return:
+        """Read and process training data from a TSV file.
 
-        Get the number of classes for each class create a nested dictionary
-        '''
+        Returns
+        -------
+        dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
@@ -203,13 +230,12 @@ class MUTAGDataset(RDFGraphDataset):
         return data_dict
 
     def read_testing_data(self):
-        '''
-        :param rootpath:
-        :param testing_path:
-        :return:
+        """Read and process Test data from a TSV file.
 
-        Get the number of classes for each class create a nested dictionary
-        '''
+        Returns
+        -------
+        dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
@@ -227,6 +253,7 @@ class MUTAGDataset(RDFGraphDataset):
 
         return data_dict
 
+
 class DBLPDataset(RDFGraphDataset):
     def __int__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
@@ -240,13 +267,12 @@ class DBLPDataset(RDFGraphDataset):
         return unique_classes
 
     def read_training_data(self):
-        '''
-        :param rootpath:
-        :param training_path:
-        :return: dictionary with class labels as key and values as
+        """Read and process training data from a TSV file.
 
-        Get the number of classes for each class create a nested dictionary
-        '''
+         Returns
+        -------
+        dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
@@ -264,13 +290,11 @@ class DBLPDataset(RDFGraphDataset):
         return data_dict
 
     def read_testing_data(self):
-        ''' TODO: Rewrite the doc string
-        :param rootpath:
-        :param test_path:
-        :return: dictionary with class labels as keys and corresponding values i.e. the person and id
-
-        Get the number of classes for each class create a nested dictionary.
-        '''
+        """Read and process testing data from a TSV file.
+            Returns
+            -------
+            dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
@@ -289,17 +313,12 @@ class DBLPDataset(RDFGraphDataset):
 
 
 class BGSDataset(RDFGraphDataset):
-    r"""MUTAG raw_data for node classification task
-
+    r"""BGS raw_data for node classification task
     BGS raw_data statistics:
-
     - Number of Classes: 2
     - Label Split:
-        - Train: 272
-        - Test: 68
-
-    Parameters
-    -----------
+        - Train: 117
+        - Test: 29
     """
 
     def __int__(self, rootpath, training_path, test_path):
@@ -315,13 +334,6 @@ class BGSDataset(RDFGraphDataset):
         return unique_classes
 
     def read_training_data(self):
-        '''
-        :param rootpath:
-        :param training_path:
-        :return:
-
-        Get the number of classes for each class create a nested dictionary
-        '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
@@ -342,13 +354,6 @@ class BGSDataset(RDFGraphDataset):
         return data_dict
 
     def read_testing_data(self):
-        '''
-        :param rootpath:
-        :param testing_path:
-        :return:
-
-        Get the number of classes for each class create a nested dictionary
-        '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
@@ -371,7 +376,13 @@ class BGSDataset(RDFGraphDataset):
 
 
 class AMDataset(RDFGraphDataset):
-
+    """AM dataset. for node classification task
+        AM dataset statistics:
+        - Number of Classes: 11
+        - Label Split:
+            - Train: 802
+            - Test: 198
+    """
     def __int__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
 
@@ -384,13 +395,6 @@ class AMDataset(RDFGraphDataset):
         return unique_classes
 
     def read_training_data(self):
-        '''
-        :param rootpath:
-        :param training_path:
-        :return: dictionary with class labels as key and values as
-
-        Get the number of classes for each class create a nested dictionary
-        '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
@@ -430,13 +434,6 @@ class AMDataset(RDFGraphDataset):
         return data_dict
 
     def read_testing_data(self):
-        ''' TODO: Rewrite the doc string
-        :param rootpath:
-        :param test_path:
-        :return: dictionary with class labels as keys and corresponding values i.e. the person and id
-
-        Get the number of classes for each class create a nested dictionary.
-        '''
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
