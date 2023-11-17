@@ -1,56 +1,51 @@
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import random
 from collections import Counter
-
 from rdflib import URIRef, RDF, OWL, Literal
 
-
 class RandomWalk(metaclass=ABCMeta):
-    def __init__(self, graph, data_dict, num_walks=4, depth=3, labelled=False, probability_dist=False):
+    def __init__(self, graph, data_dict, num_walks=4, depth=3):
         self.random_walk = {}
         self.data_dict = data_dict
         self.graph = graph
         self.num_walks = num_walks
         self.depth = depth
-        self.labelled = labelled
         self.most_occurring_pattern = {}
-        self.probabilistic_dist = probability_dist
 
     def get_random_walk(self):
         return self.random_walk
 
     def set_random_walk(self):
-        self._random_walk(self.data_dict, self.graph, self.num_walks, self.depth,
-                          self.labelled, self.probabilistic_dist)
-
+        self._random_walk(self.data_dict, self.graph, self.num_walks, self.depth
+                          )
     def clean(self):
         self.random_walk = None
 
-    def _random_walk(self, data_dict, graph, num_walks=5, depth=3, labelled=False, probability_dist=False):
-
-        if labelled:
-            classes_for_rw = data_dict.keys()
-            for cls in classes_for_rw:
-                training_nodes = data_dict[cls]
-                for node in training_nodes:
-                    if probability_dist:
-                        path_sequences = self.generate_random_walks_based_on_prob([node], graph, num_walks, depth)
-                    else:
-                        path_sequences = self.generate_random_walks([node], graph, num_walks, depth)
-                    if node not in self.random_walk:
-                        self.random_walk[node] = [path_sequences, cls]
-        else:
-            nodes = data_dict.keys()
-            for node in nodes:
-                if probability_dist:
-                    path_sequences = self.generate_random_walks_based_on_prob([node], graph, num_walks, depth)
-                else:
-                    path_sequences = self.generate_random_walks([node], graph, num_walks, depth)
-                # while len(path_sequences) == 0 and depth > 1:
-                #     depth = depth - 1
-                #     path_sequences = self.generate_random_walks([node], graph, num_walks, depth)
+    def _random_walk(self, data_dict, graph, num_walks=5, depth=3):
+        classes_for_rw = data_dict.keys()
+        for cls in classes_for_rw:
+            training_nodes = data_dict[cls]
+            for node in training_nodes:
+                path_sequences = self.generate_random_walks([node], graph, num_walks, depth)
                 if node not in self.random_walk:
-                    self.random_walk[node] = path_sequences
+                    self.random_walk[node] = [path_sequences, cls]
+
+    def calculate_object_probabilities(self, current_node, predicates, graph):
+        # Calculate probabilities based on object cardinality
+        object_cardinalities = Counter()
+
+        for predicate in predicates:
+            objects = list(graph.objects(subject=current_node, predicate=predicate))
+            object_cardinalities[predicate] = len(objects)
+
+        total_cardinality = sum(object_cardinalities.values())
+        if total_cardinality == 0:
+            # If there are no objects, assign equal probabilities to predicates
+            return [1.0 / len(predicates)] * len(predicates)
+        else:
+            # Calculate probabilities based on cardinality
+            object_probabilities = [object_cardinalities[predicate] / total_cardinality for predicate in predicates]
+            return object_probabilities
 
     def get_classes_of_current_node(self, graph, current_node):
         # Get the classes of the current node
@@ -58,11 +53,11 @@ class RandomWalk(metaclass=ABCMeta):
         classes_of_current_node = []
         for _, _, class_ in class_triples:
             classes_of_current_node.append(class_)
-        if len(classes_of_current_node) < 1:
-            print(current_node)
         return classes_of_current_node
 
-    def generate_random_walks_based_on_prob(self, nodes, graph, num_walks, depth):
+
+class BiasedRandomWalk(RandomWalk):
+    def generate_random_walks(self, nodes, graph, num_walks, depth):
         path_sequences = []
         for node in nodes:
             for walk in range(num_walks):
@@ -126,6 +121,8 @@ class RandomWalk(metaclass=ABCMeta):
                     path_sequences.append(path_sequence)
         return path_sequences
 
+
+class RandomWalkWithoutBias(RandomWalk):
     def generate_random_walks(self, nodes, graph, num_walks, depth):
         path_sequences = []
         for node in nodes:
@@ -139,28 +136,29 @@ class RandomWalk(metaclass=ABCMeta):
                     # Get all outgoing predicates from the current node
                     predicates = list(graph.predicates(subject=current_node))
                     predicates = [predicate for predicate in predicates if predicate != RDF.type]
-                    # print(f'Predicates:{predicates}')
                     if not predicates:
                         break  # Stop the random walk if there are no outgoing predicates
 
                     # Choose a random edge/predicate
                     random_predicate = predicates[random.randint(0, len(predicates) - 1)]
+                    # print('Choosen Predicate', random_predicate)
 
                     # Get all objects connected by the random predicate
                     objects = list(graph.objects(subject=current_node, predicate=random_predicate))
+                    # print('Object', objects)
 
                     if not objects:
                         break
 
                     # Choose a random object
                     random_object = objects[random.randint(0, len(objects) - 1)]
+                    # print('Choosen Object', random_object)
                     random_object_class = None
 
-                    # Check if the predicate is a data property
-                    is_data_property = (random_predicate, RDF.type, OWL.DatatypeProperty) in graph
-                    if is_data_property:
+                    # Check if the object is a literal
+                    if isinstance(random_object, Literal):
                         data_prop_flag = True
-                        random_object_class = random_object.datatype
+                        random_object_class = random_object
                     else:
                         data_prop_flag = False
 
@@ -178,24 +176,6 @@ class RandomWalk(metaclass=ABCMeta):
                     # Update the current node for the next step
                     current_node = random_object
 
-                if len(path_sequence) >= ((depth * 2) - 1):
-                    # if len(path_sequence) > 1:
+                if 1 < len(path_sequence) <= ((depth * 2) - 1):
                     path_sequences.append(path_sequence)
         return path_sequences
-
-    def calculate_object_probabilities(self, current_node, predicates, graph):
-        # Calculate probabilities based on object cardinality
-        object_cardinalities = Counter()
-
-        for predicate in predicates:
-            objects = list(graph.objects(subject=current_node, predicate=predicate))
-            object_cardinalities[predicate] = len(objects)
-
-        total_cardinality = sum(object_cardinalities.values())
-        if total_cardinality == 0:
-            # If there are no objects, assign equal probabilities to predicates
-            return [1.0 / len(predicates)] * len(predicates)
-        else:
-            # Calculate probabilities based on cardinality
-            object_probabilities = [object_cardinalities[predicate] / total_cardinality for predicate in predicates]
-            return object_probabilities

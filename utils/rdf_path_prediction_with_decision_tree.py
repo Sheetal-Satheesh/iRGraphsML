@@ -1,25 +1,25 @@
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 import matplotlib.pyplot as plt
 import pandas as pd
-from utils.random_walk import RandomWalk
+from utils.random_walk import BiasedRandomWalk, RandomWalkWithoutBias
 from utils.operations import remove_uri_from_dict
 import numpy as np
 
 
 class DecisionTreePredictPath:
-    def __init__(self, graph, data_dict):
+    def __init__(self, rdf_graph):
         """
            Initialize the DecisionTreePredictPath class.
 
            Args:
-               graph: The graph representing the data.
-               data_dict: A dictionary containing the Training Data and corresponding labels.
+               rdf_rdf_graph: The rdf_graph representing the data.
+               train_data: A dictionary containing the Training Data and corresponding labels.
 
         """
-        self.graph = graph
-        self.data_dict = data_dict
-        self.clf = None
+        self.rdf_graph = rdf_graph
         self.train_data = None
+        self.clf = None
+        self.feature = None
 
     def __str__(self):
         """
@@ -33,13 +33,13 @@ class DecisionTreePredictPath:
             return "Classifier has not been trained yet."
 
         # Get class labels (replace with your actual class labels)
-        class_labels = self.train_data['label'].unique().tolist()  # Add names for all classes
+        class_labels = self.feature['label'].unique().tolist()  # Add names for all classes
 
         # Initialize the string representation
         tree_str = ""
 
         # Create a string representation of the decision tree
-        tree_str += self._tree_to_str(self.clf.tree_, self.train_data.columns.drop(['label', 'instance']), class_labels)
+        tree_str += self._tree_to_str(self.clf.tree_, self.feature.columns.drop(['label', 'instance']), class_labels)
 
         return tree_str
 
@@ -79,35 +79,38 @@ class DecisionTreePredictPath:
 
             return f"{indent}{condition}{left_child}{indent}else:\n{right_child}"
 
-    def fit(self, num_walks, walk_depth):
+    def fit(self, train_data,  num_walks, walk_depth):
         """
             Fit the decision tree classifier to the training data.
 
             Args:
                 num_walks: Number of random walks to perform.
                 walk_depth: Depth of the random walks.
+                :param train_data:  Input training data
 
         """
-        rw1 = RandomWalk(self.graph, self.data_dict, num_walks=num_walks, depth=walk_depth,
-                         labelled=True, probability_dist=True)
+        self.train_data = train_data  # Store data_dict for later use
+        rw1 = BiasedRandomWalk(self.rdf_graph, self.train_data, num_walks=num_walks, depth=walk_depth
+                         )
         rw1.set_random_walk()
         walks = rw1.get_random_walk()
         removed_uri = remove_uri_from_dict(walks)
         df = self._convert_paths_into_features(removed_uri)
 
         X = df.drop(['label', 'instance'], axis=1)
+
         y = df['label']
 
         # Create a DecisionTreeClassifier with the Gini criterion
-        clf = DecisionTreeClassifier(criterion='gini', random_state=0, max_depth=5)
+        clf = DecisionTreeClassifier(criterion='gini', random_state=3, max_depth=6, ccp_alpha=0.01, min_samples_leaf=2)
 
         # Fit the classifier to the data
         clf.fit(X, y)
 
-        self.train_data = df
+        self.feature = df
         self.clf = clf
 
-    def predict(self, num_walks, walk_depth, test_data):
+    def predict(self, test_data, num_walks, walk_depth):
         """
             Predict labels for test data using the trained classifier.
 
@@ -120,12 +123,12 @@ class DecisionTreePredictPath:
                 tuple: A tuple containing predicted labels and true labels.
 
         """
-        rw1 = RandomWalk(self.graph, test_data, num_walks=num_walks, depth=walk_depth, labelled=True,
-                         probability_dist=True)
+        rw1 = BiasedRandomWalk(self.rdf_graph, test_data, num_walks=num_walks, depth=walk_depth
+                         )
         rw1.set_random_walk()
         walks = rw1.get_random_walk()
         removed_uri = remove_uri_from_dict(walks)
-        test_df = self.preprocess_test_data(removed_uri)
+        test_df = self._preprocess_test_data(removed_uri)
         X = test_df.drop(['label', 'instance'], axis=1)
         # Predict class labels
         predictions = self.clf.predict(X)
@@ -163,6 +166,7 @@ class DecisionTreePredictPath:
         """
         # Convert the dictionary into a list of dictionaries
         data_list = []
+        print(path_sequences)
         for key, value in path_sequences.items():
             instance = key
             labels = ['-'.join(nested_list) for nested_list in value[0]]
@@ -179,7 +183,7 @@ class DecisionTreePredictPath:
         df.to_csv('train.tsv')
         return df
 
-    def preprocess_test_data(self, path_sequences):
+    def _preprocess_test_data(self, path_sequences):
         """
             Preprocess test data to match the format of training data.
 
@@ -190,7 +194,7 @@ class DecisionTreePredictPath:
                 pd.DataFrame: Preprocessed test data.
         """
         # Create an empty DataFrame with columns from the training data
-        df = pd.DataFrame(columns=self.train_data.columns)
+        df = pd.DataFrame(columns=self.feature.columns)
 
         # Create a list of dictionaries to hold the data
         data_list = []
@@ -219,15 +223,15 @@ class DecisionTreePredictPath:
         df = pd.DataFrame(data_list)
 
         # Add columns that are in the training data but not in the test data
-        missing_columns = set(self.train_data.columns) - set(df.columns)
+        missing_columns = set(self.feature.columns) - set(df.columns)
         for col in missing_columns:
             df[col] = 0
 
         df = df.fillna(0)
         # Reorder the columns to match the order in the training data
-        df = df[self.train_data.columns]
+        df = df[self.feature.columns]
         df.to_csv('ttttt.tsv')
-        self.train_data.to_csv('train.csv')
+        self.feature.to_csv('train.csv')
         return df
 
     def get_decision_paths(self, X):
@@ -297,7 +301,23 @@ class DecisionTreePredictPath:
             return
 
         # Plot the decision tree
-        plt.figure(figsize=(12, 8))
-        plot_tree(self.clf, filled=True, feature_names=self.train_data.columns.drop(['label', 'instance']),
+        plt.figure(figsize=(16, 10))
+        plot_tree(self.clf, filled=True, feature_names=self.feature.columns.drop(['label', 'instance']),
                   class_names=[str(label) for label in self.clf.classes_])
-        plt.show()
+        plt.savefig('Decision_tree_1.pdf')
+
+    def calculate_feature_importance(self):
+        """
+                    Calculate and return feature importances from the trained decision tree.
+
+                    Returns:
+                        dict: A dictionary with feature names as keys and their importances as values.
+                """
+        if self.clf is None:
+            print("Classifier has not been trained yet.")
+            return None
+
+        feature_importances = dict(
+            zip(self.feature.columns.drop(['label', 'instance']), self.clf.feature_importances_)
+            )
+        return feature_importances

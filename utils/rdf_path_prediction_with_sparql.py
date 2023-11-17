@@ -1,8 +1,11 @@
 import copy
 from collections import OrderedDict
 
-from utils.random_walk import RandomWalk
+from utils.random_walk import BiasedRandomWalk, RandomWalkWithoutBias
 from utils.operations import find_disjoint_lists, get_most_occurring_pattern_for_random_walks
+from rdflib import Literal, URIRef
+import pandas as pd
+from rdflib.plugins.sparql import sparql
 
 
 class RDFPathClassifierWithSPARQl:
@@ -25,12 +28,26 @@ class RDFPathClassifierWithSPARQl:
             path (None or collections.OrderedDict): Deprecated. Use path_sequence instead.
 
         """
-    def __init__(self, graph, algorithm=None, prominent_class=None):
-        self.graph = graph
+    def __init__(self, rdf_graph, algorithm=None, prominent_class=None):
+        self.rdf_graph = rdf_graph
         self.algorithm = algorithm
         self.prominent_class = prominent_class
         self.path_sequence = None
         self.path = None
+
+
+    def __str__(self):
+        if self.path_sequence:
+            # Print the top 4 path sequences for each class label
+            output = "Top 4 Path Sequences:\n"
+            for class_label, paths in self.path_sequence.items():
+                output += f"Class Label: {class_label}\n"
+                for i, path in enumerate(paths[:4], 1):
+                    output += f"Path {i}: {' -> '.join(map(str, path))}\n"
+                output += "\n"
+            return output
+        else:
+            return "Path sequence not set. Please run fit() to generate path sequences."
 
     def set_path_sequence(self, data_dict, num_walks, depth):
         """
@@ -42,16 +59,15 @@ class RDFPathClassifierWithSPARQl:
                 depth (int): The depth of the random walks.
 
         """
-        if self.algorithm is None:
-            self.algorithm = RandomWalk(self.graph, data_dict, num_walks=num_walks,
-                                        depth=depth, labelled=True, probability_dist=False)
+        rw1 = self._create_random_walk_object(data_dict, self.algorithm, num_walks, depth)
 
         # Generate random walks
-        self.algorithm.set_random_walk()
-        paths_from_walks = self.algorithm.get_random_walk()
+        rw1.set_random_walk()
+        paths_from_walks = rw1.get_random_walk()
 
         # Process paths based on class labels
         paths = self.process_paths_based_on_class_labels(paths_from_walks)
+
         # Find most occurring patterns
         most_occurring_pattern = get_most_occurring_pattern_for_random_walks(paths, frequency_count=False, count=30)
 
@@ -62,12 +78,12 @@ class RDFPathClassifierWithSPARQl:
         # Set path sequence
         self.path_sequence = OrderedDict(mutually_exclusive_pattern_app_two)
 
-    def fit(self, data_dict, num_walks, depth):
+    def fit(self, train_data, num_walks, depth):
         """
         Fit the classifier by setting the path sequence and return it.
 
         Args:
-            data_dict (dict): A dictionary containing data for random walks.
+            train_data (dict): A dictionary containing data for random walks.
             num_walks (int): The number of random walks to generate.
             depth (int): The depth of the random walks.
 
@@ -75,8 +91,7 @@ class RDFPathClassifierWithSPARQl:
             collections.OrderedDict: The path sequence.
 
         """
-
-        self.set_path_sequence(data_dict, num_walks, depth)
+        self.set_path_sequence(train_data, num_walks, depth)
         return self.path_sequence
 
     def predict(self, test_data):
@@ -136,7 +151,9 @@ class RDFPathClassifierWithSPARQl:
                 predicted_dict[key]['label'] = new_value
 
         predicted_dict_with_removed_uri = self.replace_uris_in_path(predicted_dict)
-        return predicted_dict_with_removed_uri
+        predictions, actual_labels = self.format_data_for_metrics(test_data, predicted_dict_with_removed_uri)
+
+        return predictions, actual_labels
 
     def predict_class(self, paths, test_id):
         """
@@ -151,16 +168,23 @@ class RDFPathClassifierWithSPARQl:
 
         """
         flag = False
-
         for sub_path in paths:
             if len(sub_path) >= 3:
                 path = copy.deepcopy(sub_path)
                 sub_type = sub_path.pop(0)
                 pred = sub_path.pop(0)
-                obj_type = sub_path.pop(0)
-                results = self.generate_sparql_query_with_id_and_type(test_id, sub_type, pred, obj_type)
-                l_ids = [row.res for row in results if row.res is not None]
+                obj = sub_path.pop(0)
+                results = self.generate_sparql_query_with_id_and_type(test_id, sub_type, pred, obj)
+                ask_answer = results.askAnswer
+                # print(ask_answer)
+                if ask_answer is not None:
+                    if results:
+                        flag = True
+                        return flag, path
+                    else:
+                        continue
 
+                l_ids = [row.res for row in results if row.res is not None]
                 if len(l_ids) != 0 and len(sub_path) != 0:
                     is_valid_path = self.check_path_validity(sub_path, l_ids)
                     if is_valid_path:
@@ -189,6 +213,14 @@ class RDFPathClassifierWithSPARQl:
         flag = False
         for item in list_ids:
             results = self.generate_sparql_query_with_id(item, pred_type, obj_type)
+            ask_answer = results.askAnswer
+
+            if ask_answer is not None:
+                if results:
+                    return True
+                else:
+                    continue
+
             value_res = [row.res for row in results if row.res is not None]
             if len(path) != 0 and len(value_res) == 0:
                 continue
@@ -201,12 +233,12 @@ class RDFPathClassifierWithSPARQl:
 
         return flag
 
-    def generate_sparql_query_with_id_and_type(self, bond_id, sub_type, pred, obj_type):
+    def generate_sparql_query_with_id_and_type(self, id, sub_type, pred, obj):
         """
             Generate a SPARQL query to retrieve data based on identifiers and types.
 
             Args:
-                bond_id (str): The identifier for a bond.
+                id (str): The identifier for a bond.
                 sub_type (str): The subject's RDF type.
                 pred (str): The predicate.
                 obj_type (str): The object's RDF type.
@@ -215,35 +247,65 @@ class RDFPathClassifierWithSPARQl:
                 rdflib.plugins.sparql.processor.SPARQLResult: SPARQL query results.
 
         """
-        query = f"""
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-            SELECT ?res
-            WHERE {{
-                    {{  <{bond_id}> rdf:type <{sub_type}> .
-                        <{bond_id}> <{pred}> ?res .
-                        FILTER (
-                            isLiteral(?res) &&
-                            (datatype(?res) = xsd:double || datatype(?res) = xsd:float || 
-                            datatype(?res) = xsd:int || datatype(?res) = xsd:boolean) && 
-                            datatype(?res) = <{obj_type}>
-                        )
-                    }}       
-            UNION 
-                {{       
-                    <{bond_id}> rdf:type <{sub_type}> .
-                    <{bond_id}> <{pred}> ?res . 
-                    ?res rdf:type <{obj_type}>
-                    FILTER (!isLiteral(?res))
-                }}
-        }}
-        """
+        try:
+            if isinstance(obj, Literal):
+                if obj is None:
+                    # Handle the case where obj_value is None
+                    # You can choose to exclude it from the query or treat it as an empty string
+                    query = f"""
+                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                        ASK
+                        WHERE {{
+                            <{id}> rdf:type <{sub_type}> .
+                            <{id}> <{pred}> "" .
+                        }}
+                    """
+                elif obj == "":
+                    # If the object is an empty string
+                    query = f"""
+                            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                            ASK
+                            WHERE {{
+                                <{id}> rdf:type <{sub_type}> .
+                                <{id}> <{pred}> "" .
+                            }}
+                        """
+                else:
+                    # If the object is a literal, construct an ASK query
+                    escaped_obj_value = obj.n3()
+                    # Otherwise, construct the ASK query with the escaped object value
+                    query = f"""
+                            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                            ASK
+                            WHERE {{
+                                <{id}> rdf:type <{sub_type}> .
+                                <{id}> <{pred}> {escaped_obj_value} .
+                            }}
+                        """
+            else:
+                query = f"""
+                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+                        SELECT ?res
+                        WHERE {{
+                            <{id}> rdf:type <{sub_type}> .
+                            <{id}> <{pred}> ?res . 
+                            ?res rdf:type <{obj}>
+                        }}
+                    """
+        except sparql.SPARQLExceptions.QueryBadFormed as e:
+            print(f"Error in SPARQL query: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
-        results = self.graph.query(query)
+        results = self.rdf_graph.query(query)
         return results
 
-    def generate_sparql_query_with_id(self, sub_type, pred, obj_type):
+    def generate_sparql_query_with_id(self, sub_type, pred, obj):
         """
             Generate a SPARQL query to retrieve data based on identifiers.
 
@@ -256,30 +318,57 @@ class RDFPathClassifierWithSPARQl:
                 rdflib.plugins.sparql.processor.SPARQLResult: SPARQL query results.
 
         """
-        query_string = f"""
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-        SELECT ?res
-        WHERE {{
-                {{                
-                    <{sub_type}> <{pred}> ?res  .
-                    FILTER (
-                        isLiteral(?res) &&
-                        (datatype(?res) = xsd:double || datatype(?res) = xsd:float ||
-                         datatype(?res) = xsd:int || datatype(?res) = xsd:boolean) && 
-                        datatype(?res) = <{obj_type}>
-                    )
-                }}            
-            UNION 
-            {{       
-                <{sub_type}> <{pred}> ?res  .
-                ?res rdf:type <{obj_type}> .
-                FILTER (!isLiteral(?res))
-            }}
-        }}
-        """
+        try:
+            if isinstance(obj, Literal):
+                if obj is None:
+                    # Handle the case where obj_value is None
+                    query = f"""
+                         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                         PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                         ASK
+                         WHERE {{
+                             <{sub_type}> <{pred}> "" .
+                         }}
+                     """
+                elif obj == "":
+                    # If the object is an empty string
+                    query = f"""
+                             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                             PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                             ASK
+                             WHERE {{
+                                 <{sub_type}> <{pred}> "" .
+                             }}
+                         """
+                else:
+                    # If the object is a literal, construct an ASK query
+                    escaped_obj_value = obj.n3()
+                    # Otherwise, construct the ASK query with the escaped object value
+                    query = f"""
+                             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                             PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                             ASK
+                             WHERE {{
+                                 <{sub_type}> <{pred}> {escaped_obj_value} .
+                             }}
+                         """
+            else:
+                query = f"""
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+                SELECT ?res
+                WHERE {{      
+                        <{sub_type}> <{pred}> ?res  .
+                        ?res rdf:type <{obj}> .
+                    }}
+            """
+        except sparql.SPARQLExceptions.QueryBadFormed as e:
+            print(f"Error in SPARQL query: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
-        results = self.graph.query(query_string)
+
+        results = self.rdf_graph.query(query)
         return results
 
     def process_paths_based_on_class_labels(self, paths):
@@ -293,37 +382,71 @@ class RDFPathClassifierWithSPARQl:
                 dict: A dictionary containing mutually exclusive paths for each class label.
 
         """
-        unique_path_dict_for_each_class_label = {}
+        unique_paths_by_class = {}
         for key, value in paths.items():
             label = value[1]  # Get the label (1.0)
             walks = list(set([tuple(w) for w in value[0]]))  # Convert inner lists to tuples
 
-            # Check if the label is already in the unique_path_dict_for_each_class_label
-            if label in unique_path_dict_for_each_class_label:
+            # Check if the label is already in the unique_paths_by_class
+            if label in unique_paths_by_class:
                 # Append the walks to the existing list for that label
-                unique_path_dict_for_each_class_label[label].extend(walks)
+                unique_paths_by_class[label].extend(walks)
             else:
                 # Create a new entry for the label and initialize it with the walks
-                unique_path_dict_for_each_class_label[label] = walks
+                unique_paths_by_class[label] = walks
 
-        return unique_path_dict_for_each_class_label
+        return unique_paths_by_class
 
     def replace_uris_in_path(self, paths):
-        modified_path = {}
+        modified_paths = {}
 
         for key, value in paths.items():
-            modified_path_value = []
-            if value['path'] is not None:
-                for term in value['path']:
-                    modified_path_value.append(str(term).split('#')[-1])
-                modified_path[key] = {
-                    'label': value['label'],
-                    'path': '-'.join(modified_path_value)
-                }
-            else:
-                modified_path[key] = {
-                    'label': value['label'],
-                    'path': None
-                }
+            modified_paths[key] = {
+                'label': value['label'],
+                'path': '-'.join(str(term).split('#')[-1] for term in value['path']) if value['path'] else None
+            }
 
-        return modified_path
+        return modified_paths
+
+    def format_data_for_metrics(self, test_data=None, predicted_data=None):
+        test_ids = []
+        actual_predictions = []
+        predicted_predictions = []
+
+        # Iterate through test data
+        for class_label, inner_dict in test_data.items():
+            for test_id, _ in inner_dict.items():
+                test_ids.append(test_id)
+                actual_predictions.append(class_label)
+
+                # Match test_id with predicted_data
+                predicted_label = None
+                for predicate_id, inner_pred_dict in predicted_data.items():
+                    if test_id == predicate_id:
+                        predicted_label = inner_pred_dict['label']
+                        break
+
+                predicted_predictions.append(predicted_label)
+
+        # Create a DataFrame
+        df = pd.DataFrame({
+            'testid': test_ids,
+            'actual_prediction': actual_predictions,
+            'predicted_prediction': predicted_predictions
+        }
+        )
+        df.to_csv('sparql_prediction.csv')
+        return df['actual_prediction'], df['predicted_prediction']
+
+    def _create_random_walk_object(self, data, algorithm, num_walks, walk_depth):
+        if algorithm is None:
+            # Create an object of RandomWalkWithoutBias
+            rw_object = RandomWalkWithoutBias(self.rdf_graph, data, num_walks=num_walks,
+                                         depth=walk_depth
+                                         )
+        else:
+            # Create an object of the specified algorithm
+            rw_object = algorithm(self.rdf_graph, data, num_walks=num_walks,
+                                  depth=walk_depth
+                                  )
+        return rw_object

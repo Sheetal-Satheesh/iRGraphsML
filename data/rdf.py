@@ -5,7 +5,7 @@ import rdflib
 import rdflib as rdf
 import pandas as pd
 
-__all__ = ["AIFBDataset", "MUTAGDataset", "DBLPDataset", "BGSDataset", "AMDataset"]
+__all__ = ["AIFBDataset", "MUTAGDataset", "BGSDataset", "CarcinogenesisDataset"]
 
 
 class RDFGraphDataset(metaclass=ABCMeta):
@@ -28,7 +28,7 @@ class RDFGraphDataset(metaclass=ABCMeta):
         get_most_prominent_class(outer_to_inner)
 
     """
-    def __init__(self, rootpath=None, training_path=None, test_path=None):
+    def __init__(self, rootpath, training_path, test_path):
         self.rootpath = rootpath
         self.training_path = training_path
         self.test_path = test_path
@@ -60,16 +60,8 @@ class RDFGraphDataset(metaclass=ABCMeta):
         return combined_graph
 
     @abstractmethod
-    def get_unique_classes(self, rootpath, training_path):
+    def get_unique_classes(self):
         """Abstract method to be implemented by subclasses.
-
-            Parameters
-            ----------
-            rootpath : str
-                The root directory path where RDF data is stored.
-            training_path : str
-                The directory path where training RDF data is stored.
-
             Returns
             -------
             dict
@@ -112,12 +104,12 @@ class AIFBDataset(RDFGraphDataset):
         - Test: 36
     '''
 
-    def __int__(self, rootpath, training_path, test_path):
+    def __init__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
 
-    def get_unique_classes(self, rootpath, training_path):
+    def get_unique_classes(self):
         # Read the TSV file into a DataFrame
-        filepath = rootpath + training_path
+        filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
         # Get the unique values from the "label" column as a list
         unique_classes = df['label_affiliation'].unique().tolist()
@@ -193,13 +185,12 @@ class MUTAGDataset(RDFGraphDataset):
 
     """
 
-    def __int__(self, rootpath, training_path, test_path):
-        name = "mutag-hetero"
+    def __init__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
 
-    def get_unique_classes(self, rootpath, training_path):
+    def get_unique_classes(self):
         # Read the TSV file into a DataFrame
-        filepath = rootpath + training_path
+        filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
         # Get the unique values from the "label" column as a list
         unique_classes = df['label_mutagenic'].unique().tolist()
@@ -254,64 +245,6 @@ class MUTAGDataset(RDFGraphDataset):
         return data_dict
 
 
-class DBLPDataset(RDFGraphDataset):
-    def __int__(self, rootpath, training_path, test_path):
-        super().__init__(rootpath, training_path, test_path)
-
-    def get_unique_classes(self, rootpath, training_path):
-        # Read the TSV file into a DataFrame
-        filepath = rootpath + training_path
-        df = pd.read_csv(filepath, sep='\t')
-        # Get the unique values from the "label" column as a list
-        unique_classes = df['cls'].unique().tolist()
-        return unique_classes
-
-    def read_training_data(self):
-        """Read and process training data from a TSV file.
-
-         Returns
-        -------
-        dict
-        """
-        # Read the TSV file into a DataFrame
-        filepath = self.rootpath + self.training_path
-        df = pd.read_csv(filepath, sep='\t')
-        data_dict = {}
-        # Iterate through the DataFrame and populate the dictionary
-        for index, row in df.iterrows():
-            label = row['cls']
-            instance = row['instance']
-            citations = int(row['num_citations'])
-
-            if label not in data_dict:
-                data_dict[label] = {}
-
-            data_dict[label][instance] = citations
-        return data_dict
-
-    def read_testing_data(self):
-        """Read and process testing data from a TSV file.
-            Returns
-            -------
-            dict
-        """
-        # Read the TSV file into a DataFrame
-        filepath = self.rootpath + self.test_path
-        df = pd.read_csv(filepath, sep='\t')
-        data_dict = {}
-        # Iterate through the DataFrame and populate the dictionary
-        for index, row in df.iterrows():
-            label = row['cls']
-            instance = row['instance']
-            citations = int(row['num_citations'])
-
-            if label not in data_dict:
-                data_dict[label] = {}
-
-            data_dict[label][instance] = citations
-        return data_dict
-
-
 class BGSDataset(RDFGraphDataset):
     r"""BGS raw_data for node classification task
     BGS raw_data statistics:
@@ -321,13 +254,12 @@ class BGSDataset(RDFGraphDataset):
         - Test: 29
     """
 
-    def __int__(self, rootpath, training_path, test_path):
-        name = "bgs-hetero"
+    def __init__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
 
-    def get_unique_classes(self, rootpath, training_path):
+    def get_unique_classes(self):
         # Read the TSV file into a DataFrame
-        filepath = rootpath + training_path
+        filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
         # Get the unique values from the "label" column as a list
         unique_classes = df['label_lithogenesis'].unique().tolist()
@@ -375,99 +307,68 @@ class BGSDataset(RDFGraphDataset):
         return data_dict
 
 
-class AMDataset(RDFGraphDataset):
-    """AM dataset. for node classification task
-        AM dataset statistics:
-        - Number of Classes: 11
-        - Label Split:
-            - Train: 802
-            - Test: 198
+class CarcinogenesisDataset(RDFGraphDataset):
+    r"""BGS raw_data for node classification task
+    BGS raw_data statistics:
+    - Number of Classes: 2
+    - Label Split:
+        - Train: 117
+        - Test: 29
     """
-    def __int__(self, rootpath, training_path, test_path):
+
+    def __init__(self, rootpath, training_path, test_path):
         super().__init__(rootpath, training_path, test_path)
 
-    def get_unique_classes(self, rootpath, training_path):
+    def get_unique_classes(self):
         # Read the TSV file into a DataFrame
-        filepath = rootpath + training_path
+        filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
         # Get the unique values from the "label" column as a list
-        unique_classes = df['label_cateogory'].unique().tolist()
+        unique_classes = df['label'].unique().tolist()
         return unique_classes
 
     def read_training_data(self):
+        """Read and process training data from a TSV file.
+
+        Returns
+        -------
+        dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.training_path
         df = pd.read_csv(filepath, sep='\t')
         data_dict = {}
         # Iterate through the DataFrame and populate the dictionary
         for index, row in df.iterrows():
-            label = row['label_cateogory']
-            if label == 'http://purl.org/collections/nl/am/t-22503':
-                label = 't-22503'
-            elif label == 'http://purl.org/collections/nl/am/t-15459':
-                label = 't-15459'
-            elif label == 'http://purl.org/collections/nl/am/t-15579':
-                label = 't-15579'
-            elif label == 'http://purl.org/collections/nl/am/t-5504':
-                label = 't-5504'
-            elif label == 'http://purl.org/collections/nl/am/t-14592':
-                label = 't-14592'
-            elif label == 'http://purl.org/collections/nl/am/t-22504':
-                label = 't-22504'
-            elif label == 'http://purl.org/collections/nl/am/t-15606':
-                label = 't-15606'
-            elif label == 'http://purl.org/collections/nl/am/t-22505':
-                label = 't-22505'
-            elif label == 'http://purl.org/collections/nl/am/t-22508':
-                label = 't-22508'
-            elif label == 'http://purl.org/collections/nl/am/t-22506':
-                label = 't-22506'
-            elif label == 'http://purl.org/collections/nl/am/t-22507':
-                label = 't-22507'
-            proxy = row['proxy']
-            data_id = int(row['id'])
+            label = row['label']
+            bond = row['bond_id']
 
             if label not in data_dict:
                 data_dict[label] = {}
 
-            data_dict[label][proxy] = data_id
+            data_dict[label][bond] = bond
+
         return data_dict
 
     def read_testing_data(self):
+        """Read and process Test data from a TSV file.
+
+        Returns
+        -------
+        dict
+        """
         # Read the TSV file into a DataFrame
         filepath = self.rootpath + self.test_path
         df = pd.read_csv(filepath, sep='\t')
         data_dict = {}
         # Iterate through the DataFrame and populate the dictionary
         for index, row in df.iterrows():
-            label = row['label_cateogory']
-            if label == 'http://purl.org/collections/nl/am/t-22503':
-                label = 't-22503'
-            elif label == 'http://purl.org/collections/nl/am/t-15459':
-                label = 't-15459'
-            elif label == 'http://purl.org/collections/nl/am/t-15579':
-                label = 't-15579'
-            elif label == 'http://purl.org/collections/nl/am/t-5504':
-                label = 't-5504'
-            elif label == 'http://purl.org/collections/nl/am/t-14592':
-                label = 't-14592'
-            elif label == 'http://purl.org/collections/nl/am/t-22504':
-                label = 't-22504'
-            elif label == 'http://purl.org/collections/nl/am/t-15606':
-                label = 't-15606'
-            elif label == 'http://purl.org/collections/nl/am/t-22505':
-                label = 't-22505'
-            elif label == 'http://purl.org/collections/nl/am/t-22508':
-                label = 't-22508'
-            elif label == 'http://purl.org/collections/nl/am/t-22506':
-                label = 't-22506'
-            elif label == 'http://purl.org/collections/nl/am/t-22507':
-                label = 't-22507'
-            proxy = row['proxy']
-            data_id = int(row['id'])
+            label = row['label']
+            bond = row['bond_id']
 
             if label not in data_dict:
                 data_dict[label] = {}
 
-            data_dict[label][proxy] = data_id
+            data_dict[label][bond] = bond
+
         return data_dict
