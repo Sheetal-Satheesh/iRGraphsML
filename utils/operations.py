@@ -1,6 +1,5 @@
 from collections import Counter
 from rdflib import URIRef
-import pandas as pd
 
 
 def remove_nested_list(input_list, target_list):
@@ -108,6 +107,7 @@ def merge_dict(input_dict):
         merged_dict.update(inner_dict)
     return merged_dict
 
+
 def filter_common_patterns(patterns_by_class):
     filtered_patterns = {}  # class -> list of patterns
 
@@ -128,6 +128,7 @@ def filter_common_patterns(patterns_by_class):
 
     return filtered_patterns
 
+
 def remove_frequency_count(pattern_by_labels):
     clean_patterns = {}
 
@@ -136,18 +137,20 @@ def remove_frequency_count(pattern_by_labels):
 
     return clean_patterns
 
+
 def get_most_occurring_pattern_for_random_walks(random_walk, frequency_count=False, count=2):
     most_occurring_pattern = {}
     if bool(random_walk):
         unique_labels = random_walk.keys()
         for cls in unique_labels:
             pattern = check_most_occurring_pattern(random_walk[cls], frequency_count=frequency_count,
-                                                        count=count)
+                                                   count=count)
             if cls not in most_occurring_pattern:
                 most_occurring_pattern[cls] = pattern
         return most_occurring_pattern
     else:
         raise Exception('Random Walks must be performed to find the most frequent pattern.')
+
 
 def check_most_occurring_pattern(patterns, frequency_count=False, count=2):
     # Count the occurrences of each unique list
@@ -161,34 +164,6 @@ def check_most_occurring_pattern(patterns, frequency_count=False, count=2):
         most_occuring_random_walk_occurrences = [item[0] for item in counts.most_common(count)]
     return most_occuring_random_walk_occurrences
 
-def format_data_for_metrics(test_data=None, predicted_data=None):
-        test_ids = []
-        actual_predictions = []
-        predicted_predictions = []
-
-        # Iterate through test data
-        for class_label, inner_dict in test_data.items():
-            for test_id, _ in inner_dict.items():
-                test_ids.append(test_id)
-                actual_predictions.append(class_label)
-
-                # Match test_id with predicted_data
-                predicted_label = None
-                for pred_id, inner_pred_dict in predicted_data.items():
-                    if test_id == pred_id:
-                        predicted_label = inner_pred_dict['label']
-                        break
-
-                predicted_predictions.append(predicted_label)
-
-        # Create a DataFrame
-        df = pd.DataFrame({
-            'testid': test_ids,
-            'actual_prediction': actual_predictions,
-            'predicted_prediction': predicted_predictions
-        })
-        df.to_csv('xyz.csv')
-        return df
 
 def extract_local_name(uri):
     # Convert the URIRef object to a string
