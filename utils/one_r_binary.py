@@ -46,16 +46,16 @@ class OneRClassifierBinary(BaseClassifierOneR):
         self.clf = None
 
     def __str__(self):
-        '''
+        """
             Print out the list in a nice way
-        '''
+        """
 
         s = '> ------------------------------\n> One R Rule List\n> ------------------------------\n'
 
         for rule in self.rules_:
             if 'col' in rule:
-                prefix = f"if ~ {rule['col']} then class ==> {rule['class_name']}"
-                val = f"if {rule['col']} then class ==> {rule['class_right']}"
+                prefix = f"if {rule['col']} then class ==> {rule['class_name']}"
+                val = f"if ~ {rule['col']} then class ==> {rule['class_right']}"
                 s += f"\t{prefix}\n\t{val}\n"
         return s
 
@@ -74,9 +74,6 @@ class OneRClassifierBinary(BaseClassifierOneR):
         self.clf = m
         if col == -2:
             return []
-
-        # y_left = y[X[:, col] < cutoff]
-        # y_right = y[X[:, col] >= cutoff]
 
         # Access the class label for a specific leaf node (e.g., left and right leaf nodes)
         tree = self.clf.tree_
@@ -99,9 +96,12 @@ class OneRClassifierBinary(BaseClassifierOneR):
 
     def predict(self, test_data, algorithm, num_walks=4, walk_depth=4):
         super().predict(test_data, algorithm, num_walks, walk_depth)
-        model_str = str(self)
-        return model_str
 
+        # Predict class labels
+        predictions = self.clf.predict(self.X_test)
+        decision_paths = self.get_decision_rules(predictions)
+
+        return predictions, self.test_df['label'], decision_paths
 
     def plot_decision_tree(self):
         """
@@ -120,3 +120,32 @@ class OneRClassifierBinary(BaseClassifierOneR):
                   )
         plt.savefig('1R.pdf')
 
+    def get_decision_rules(self, predictions=None):
+        # Create a list of results, each containing test_id, path, label, and scores
+        try:
+            if predictions is None:
+                if self.clf is not None:
+                    predictions = self.clf.predict(self.X_test)
+                else:
+                    raise Exception('Classifier needs to be fit first')
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+        results = []
+        for i in range(len(predictions)):
+            path = ''
+            for rule in self.rules_:
+                if float(predictions[i]) == float(rule['class_name']):
+                    path += f"if {rule['col']} then class ==> {rule['class_name']}\n"
+                elif float(predictions[i]) == float(rule['class_right']):
+                    path += f"if ~ {rule['col']} then class ==> {rule['class_right']}\n"
+
+                result = {
+                    "test_id": self.test_df['instance'].iloc[i],  # Replace with the actual patient_id source
+                    "path": path.strip(),
+                    "label": predictions[i]
+                }
+                results.append(result)
+
+        print(f'Results: {results}')
+        return results

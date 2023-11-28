@@ -50,7 +50,8 @@ class OneRClassifier:
         self.classifier.fit(train_data, algorithm, num_walks, walk_depth)
 
     def predict(self, test_data, algorithm=None, num_walks=4, walk_depth=4):
-        return self.classifier.predict(test_data, algorithm, num_walks, walk_depth)
+        predictions, actual_label, decision_path = self.classifier.predict(test_data, algorithm, num_walks, walk_depth)
+        return predictions, actual_label, decision_path
 
     def plot_decision_tree(self):
         if self.classifier is not None:

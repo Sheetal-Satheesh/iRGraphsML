@@ -3,30 +3,23 @@ from collections import OrderedDict
 
 from utils.random_walk import BiasedRandomWalk, RandomWalkWithoutBias
 from utils.operations import find_disjoint_lists, get_most_occurring_pattern_for_random_walks
-from rdflib import Literal, URIRef
+from rdflib import Literal
 import pandas as pd
-from rdflib.plugins.sparql import sparql
 
 
-class RDFPathClassifierWithSPARQl:
+class RDFNodeClassifierWithSPARQL:
     """
         RDF Path Classifier using SPARQL queries.
 
         This class provides methods for training a classifier based on RDF paths generated using random walks
         and making predictions on test data using SPARQL queries.
 
-        Args:
-            graph (rdflib.Graph): An RDF graph containing the knowledge base.
-            algorithm (RandomWalk): An optional preconfigured RandomWalk object for generating random walks.
-            prominent_class (str): An optional class label.
-
         Attributes:
-            graph (rdflib.Graph): The RDF graph containing the knowledge base.
+            rdf_graph (rdflib.Graph): The RDF graph containing the knowledge base.
             algorithm (RandomWalk): The RandomWalk object for generating random walks.
             prominent_class (str): The fallback class label for predictions.
             path_sequence (collections.OrderedDict): The sequence of mutually exclusive RDF path patterns.
             path (None or collections.OrderedDict): Deprecated. Use path_sequence instead.
-
         """
     def __init__(self, rdf_graph, algorithm=None, prominent_class=None):
         self.rdf_graph = rdf_graph
@@ -34,7 +27,6 @@ class RDFPathClassifierWithSPARQl:
         self.prominent_class = prominent_class
         self.path_sequence = None
         self.path = None
-
 
     def __str__(self):
         if self.path_sequence:
@@ -241,7 +233,7 @@ class RDFPathClassifierWithSPARQl:
                 id (str): The identifier for a bond.
                 sub_type (str): The subject's RDF type.
                 pred (str): The predicate.
-                obj_type (str): The object's RDF type.
+                obj (str): The object's RDF type.
 
             Returns:
                 rdflib.plugins.sparql.processor.SPARQLResult: SPARQL query results.
@@ -297,13 +289,10 @@ class RDFPathClassifierWithSPARQl:
                             ?res rdf:type <{obj}>
                         }}
                     """
-        except sparql.SPARQLExceptions.QueryBadFormed as e:
-            print(f"Error in SPARQL query: {e}")
+            results = self.rdf_graph.query(query)
+            return results
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-
-        results = self.rdf_graph.query(query)
-        return results
 
     def generate_sparql_query_with_id(self, sub_type, pred, obj):
         """
@@ -312,7 +301,7 @@ class RDFPathClassifierWithSPARQl:
             Args:
                 sub_type (str): The subject's RDF type.
                 pred (str): The predicate.
-                obj_type (str): The object's RDF type.
+                obj (str): The object's RDF type.
 
             Returns:
                 rdflib.plugins.sparql.processor.SPARQLResult: SPARQL query results.
@@ -362,14 +351,10 @@ class RDFPathClassifierWithSPARQl:
                         ?res rdf:type <{obj}> .
                     }}
             """
-        except sparql.SPARQLExceptions.QueryBadFormed as e:
-            print(f"Error in SPARQL query: {e}")
+            results = self.rdf_graph.query(query)
+            return results
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-
-
-        results = self.rdf_graph.query(query)
-        return results
 
     def process_paths_based_on_class_labels(self, paths):
         """
@@ -442,8 +427,8 @@ class RDFPathClassifierWithSPARQl:
         if algorithm is None:
             # Create an object of RandomWalkWithoutBias
             rw_object = RandomWalkWithoutBias(self.rdf_graph, data, num_walks=num_walks,
-                                         depth=walk_depth
-                                         )
+                                              depth=walk_depth
+                                              )
         else:
             # Create an object of the specified algorithm
             rw_object = algorithm(self.rdf_graph, data, num_walks=num_walks,
