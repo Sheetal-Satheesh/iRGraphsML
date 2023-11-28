@@ -1,3 +1,4 @@
+from pandas import DataFrame
 from sklearn.tree import DecisionTreeClassifier
 import pandas as pd
 from utils.random_walk import BiasedRandomWalk, RandomWalkWithoutBias
@@ -75,7 +76,7 @@ class BaseClassifierOneR(ABC):
     def __str__(self):
         pass
 
-    def fit(self, train_data, algorithm, num_walks=4, walk_depth=4):
+    def fit(self, train_data, algorithm, num_walks, walk_depth):
         self.train_data = train_data  # Store data_dict for later use
         rw1 = self._create_random_walk_object(train_data, algorithm, num_walks, walk_depth)
         rw1.set_random_walk()
@@ -95,7 +96,8 @@ class BaseClassifierOneR(ABC):
         rw1.set_random_walk()
         walks = rw1.get_random_walk()
         removed_uri = remove_uri_from_dict(walks)
-        test_df = self._preprocess_test_data(removed_uri)
+        test_df: DataFrame = self._preprocess_test_data(removed_uri)
+        self.test_df = test_df
         X_test = test_df.drop(['label', 'instance'], axis=1)
         self.X_test = X_test.to_numpy()
 

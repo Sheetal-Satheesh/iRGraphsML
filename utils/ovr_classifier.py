@@ -4,6 +4,7 @@ from sklearn.multiclass import OneVsRestClassifier
 import matplotlib.pyplot as plt
 from utils.baseclass_one_r import BaseClassifierOneR
 
+
 class OVRClassifier(BaseClassifierOneR):
     """
        OVRClassifier is a class for one-vs-rest multi-class classification using One Rule (OneR) algorithm
@@ -41,6 +42,7 @@ class OVRClassifier(BaseClassifierOneR):
        """
     def __init__(self, rdf_graph, class_names=None, criterion='gini'):
         super().__init__(rdf_graph, class_names, criterion)
+        self.class_mapping = None
         self.clf = None
 
     def __str__(self):
@@ -75,16 +77,21 @@ class OVRClassifier(BaseClassifierOneR):
         y = self.y_train
         X = self.X_train
         if not self.class_names:
-            self.class_names = np.unique(y)
+            self.class_names = list(np.unique(y))
             self.class_counts = [self.count_instances_for_class(train_data, cn) for cn in self.class_names]
             print(self.class_counts)
+
+        # Create a mapping from class names to class indices
+        self.class_mapping = {class_name: idx for idx, class_name in enumerate(self.class_names)}
         self.clf = OneVsRestClassifier(DecisionTreeClassifier(max_depth=1)).fit(X, y)
         self._extract_rule()
 
     def predict(self, test_data, algorithm=None, num_walks=4, walk_depth=4):
         super().predict(test_data, algorithm, num_walks, walk_depth)
-        model_str = str(self)
-        return model_str
+        predictions = self.clf.predict(self.X_test)
+        decision_paths = self.get_decision_rules(predictions)
+
+        return predictions, self.test_df['label'], decision_paths
 
     def plot_decision_trees_ovr(self):
         class_names = self.class_names
@@ -97,7 +104,6 @@ class OVRClassifier(BaseClassifierOneR):
                       )
             plt.savefig(f'{class_name}_ovr.pdf')
 
-
     def _extract_rule(self):
         class_names = self.class_names
         classifier = self.clf
@@ -106,7 +112,6 @@ class OVRClassifier(BaseClassifierOneR):
         for i, (class_name, estimator) in enumerate(zip(class_names, classifier.estimators_)):
             col = estimator.tree_.feature[0]  # Get the feature at the root node
             cutoff = estimator.tree_.threshold[0]
-
 
             if col == -2:
                 return []
@@ -124,3 +129,36 @@ class OVRClassifier(BaseClassifierOneR):
                 'classifier': estimator  # Include the classifier key
             }
             self.rules_.append(par_node)
+
+    def get_decision_rules(self, predictions=None):
+        try:
+            if predictions is None:
+                if self.clf is not None:
+                    predictions = self.clf.predict(self.X_test)
+                else:
+                    raise 'Classifier Needs to be fit first'
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+        results = []
+        for i in range(len(predictions)):
+            path = ''
+            for rule in self.rules_:
+                class_name = str(rule['class_name'])
+
+                # Assuming binary classification
+                if str(predictions[i]) == str(class_name):
+                    path += f"if ~ {rule['col']} then class ==> {class_name}"
+
+                    result = {
+                        "test_id": self.test_df['instance'].iloc[i],
+                        "path": path.strip(),
+                        "label": predictions[i]
+                    }
+                    results.append(result)
+                    break
+                else:
+                    continue
+
+        print(f'Results: {results}')
+        return results

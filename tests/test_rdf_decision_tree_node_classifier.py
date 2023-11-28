@@ -1,9 +1,9 @@
 import unittest
-from utils.rdf_path_prediction_with_decision_tree import DecisionTreePredictPath
+from utils.rdf_decision_tree_node_classifier import RDFDecisionTreeNodeClassifier
 from rdflib import URIRef, Graph, Literal, RDF
 
 
-class TestDecisionTreePredictPath(unittest.TestCase):
+class TestRDFDecisionTreeNodeClassifier(unittest.TestCase):
     def setUp(self):
         # Create an empty RDF graph
         g = Graph()
@@ -60,6 +60,7 @@ class TestDecisionTreePredictPath(unittest.TestCase):
         self.graph = g
         self.num_walks = 1
         self.walk_depth = 3
+        self.clf = None
 
         # Create a dictionary to represent the training data
         self.training_data = {
@@ -72,18 +73,25 @@ class TestDecisionTreePredictPath(unittest.TestCase):
             1.0: {'http://example.org/jane': 30}
         }
 
-    def test_fit_and_predict(self):
         # Initialize the DecisionTreePredictPath class
-        tree_predictor = DecisionTreePredictPath(self.graph, self.training_data)
+        self.clf = RDFDecisionTreeNodeClassifier(self.graph)
 
         # Fit the decision tree classifier
-        tree_predictor.fit(self.num_walks, self.walk_depth)
+        self.clf.fit(self.training_data, None, self.num_walks, self.walk_depth)
+
+    def test_fit(self):
+        # Initialize the DecisionTreePredictPath class
+        self.clf = RDFDecisionTreeNodeClassifier(self.graph)
+
+        # Fit the decision tree classifier
+        self.clf.fit(self.training_data, None, self.num_walks, self.walk_depth)
 
         # Ensure that the classifier is trained
-        self.assertIsNotNone(tree_predictor.clf)
+        self.assertIsNotNone(self.clf.clf)
 
+    def test_predict(self):
         # Predict labels for the test data
-        predictions, true_labels = tree_predictor.predict(self.num_walks, self.walk_depth, self.test_data)
+        predictions, true_labels = self.clf.predict(self.test_data, None, self.num_walks, self.walk_depth, )
 
         # Check if predictions are of the correct length
         self.assertEqual(len(predictions), len(self.test_data))

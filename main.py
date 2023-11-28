@@ -1,25 +1,29 @@
-from data.rdf import MUTAGDataset, AIFBDataset, DBLPDataset, BGSDataset
-from utils.rdf_path_prediction_with_sparql import RDFPathClassifierWithSPARQl
-from utils.rdf_path_prediction_with_decision_tree import DecisionTreePredictPath
+from data.rdf import MUTAGDataset, AIFBDataset, BGSDataset, CarcinogenesisDataset
+from utils.rdf_sparql_node_classifier import RDFNodeClassifierWithSPARQL
+from utils.rdf_decision_tree_node_classifier import RDFDecisionTreeNodeClassifier
 from sklearn.metrics import f1_score, accuracy_score
-from utils.operations import format_data_for_metrics
+from utils.one_r import OneRClassifier
+from utils.random_walk import BiasedRandomWalk, RandomWalkWithoutBias
 
 
 if __name__ == "__main__":
-    rootpath = './raw_data/Mutag/mutag-hetero/'
+    rootpath = './raw_data/AIFB/aifb-hetero/'
     training_path = 'trainingSet.tsv'
     test_path = 'testSet.tsv'
-    rdf_data = MUTAGDataset(rootpath, training_path, test_path)
+    rdf_data = AIFBDataset(rootpath, training_path, test_path)
     graph = rdf_data.load_rdf_graph()
+    class_names = rdf_data.get_unique_classes()
     data_dict = rdf_data.read_training_data()
-    prominent_class = rdf_data.get_most_prominent_class(data_dict)
+    test_data = rdf_data.read_testing_data()
+    prominent_class = rdf_data.get_most_prominent_class(test_data)
+
     """
         Approach DECISION TREE
     """
-    gp = DecisionTreePredictPath(graph, data_dict)
-    gp.fit(4, 3)
+    gp = RDFDecisionTreeNodeClassifier(graph)
+    gp.fit(data_dict, None, 4, 3)
     test_data = rdf_data.read_testing_data()
-    predictions, actual_labels = gp.predict(5, 3, test_data)
+    predictions, actual_labels = gp.predict(test_data, None, 4, 3)
     print('predictions', type(predictions))
     print('actual labels', actual_labels)
 
@@ -30,24 +34,32 @@ if __name__ == "__main__":
     # Display the F1 score and accuracy
     print(f"F1 Score: {f1}")
     print(f"Accuracy: {accuracy}")
+    print(gp)
+    gp.plot_decision_tree()
+    """
+            Approach OneR
+    """
 
+    clf = OneRClassifier(graph, class_names)
+    clf.fit(data_dict, BiasedRandomWalk,  4, 3)
+    prediction, actual, _ = clf.predict(test_data, None, 4, 3)
+    print(prediction)
+    f1 = f1_score(actual, prediction, average='macro')
+    # Display the F1 score and accuracy
+    accuracy = accuracy_score(actual, prediction)
+    print(f"F1 Score: {f1}")
+    print(f"Accuracy: {accuracy}")
+    #
     """
         Approach: RANDOM WALK and Prediction With SPARQL
     """
 
-    rw = RDFPathClassifierWithSPARQl(graph, prominent_class=prominent_class)
+    rw = RDFNodeClassifierWithSPARQL(graph, algorithm=RandomWalkWithoutBias, prominent_class=prominent_class)
     path = rw.fit(data_dict, 4, 3)
     test_data = rdf_data.read_testing_data()
-    predict = rw.predict(test_data)
-    print(predict)
-    df = format_data_for_metrics(test_data, predict)
-    print(df.dtypes)
-    print(type(df['actual_prediction']))
-    # Compute the F1 score
-    f1 = f1_score(df['actual_prediction'], df['predicted_prediction'])
-
-    # Compute the accuracy
-    accuracy = accuracy_score(df['actual_prediction'], df['predicted_prediction'])
-    # Display the F1 score and accuracy
+    predictions, actual_labels = rw.predict(test_data)
+    print(rw)
+    f1 = f1_score(actual_labels, predictions, average='macro')
+    accuracy = accuracy_score(actual_labels, predictions)
     print(f"F1 Score: {f1}")
     print(f"Accuracy: {accuracy}")

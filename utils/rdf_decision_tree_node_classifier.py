@@ -10,15 +10,13 @@ class RDFDecisionTreeNodeClassifier(BaseDecisionTree):
            Initialize the DecisionTreePredictPath class.
 
            Args:
-               rdf_graph: The rdf_graph representing the data.
+               rdf_graph: The rdf_graph representing the RDF KG.
 
         """
         super().__init__(rdf_graph)
 
     def __str__(self):
         """
-            Return a string representation of the trained decision tree.
-
             Returns:
                 str: A string representation of the decision tree.
 
@@ -206,11 +204,11 @@ class RDFDecisionTreeNodeClassifier(BaseDecisionTree):
 
     def calculate_feature_importance(self):
         """
-                    Calculate and return feature importances from the trained decision tree.
+            Calculate and return feature importance's from the trained decision tree.
 
-                    Returns:
-                        dict: A dictionary with feature names as keys and their importances as values.
-                """
+            Returns:
+                dict: A dictionary with feature names as keys and their importance's as values.
+        """
         if self.clf is None:
             print("Classifier has not been trained yet.")
             return None
@@ -218,38 +216,4 @@ class RDFDecisionTreeNodeClassifier(BaseDecisionTree):
         feature_importances = dict(
             zip(self.feature.columns.drop(['label', 'instance']), self.clf.feature_importances_)
             )
-        return feature_importances
-
-    def plot_decision_tree(self):
-        """
-            Plot the trained decision tree.
-
-        """
-        # Check if the classifier has been trained
-        if self.clf is None:
-            print("Classifier has not been trained yet.")
-            return
-
-        # Plot the decision tree
-        plt.figure(figsize=(16, 10))
-        plot_tree(self.clf, filled=True, feature_names=self.feature_names_,
-                  class_names=[str(label) for label in self.clf.classes_]
-                  )
-        plt.savefig('Decision_tree_1.pdf')
-
-    def calculate_feature_importance(self):
-        """
-            Calculate and return feature importances from the trained decision tree.
-
-            Returns:
-                dict: A dictionary with feature names as keys and their importances as values.
-        """
-
-        if self.clf is None:
-            print("Classifier has not been trained yet.")
-            return None
-
-        feature_importances = dict(
-            zip(self.feature.columns.drop(['label', 'instance']), self.clf.feature_importances_)
-        )
         return feature_importances
