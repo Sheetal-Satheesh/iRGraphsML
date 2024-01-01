@@ -126,7 +126,7 @@ class RDFDecisionTreeNodeClassifier(BaseDecisionTree):
                 "scores": prediction_scores[i]  # This contains the class probabilities
             }
             results.append(result)
-        print(f'Results,{results}')
+        # print(f'Results,{results}')
 
         return predictions, self.test_df['label']
 

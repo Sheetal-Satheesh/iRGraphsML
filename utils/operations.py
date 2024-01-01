@@ -78,7 +78,6 @@ def find_disjoint_lists(patterns):
 def get_pattern_list(pattern: list, length: int = 3) -> list:
     resultant_pattern = []
     for item in pattern:
-        print(item)
         if len(item) > length:
             # concept_generator = ConceptGenerator(item)
             # resultant_pattern.append(concept_generator.generate_path())
